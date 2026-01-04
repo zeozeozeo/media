@@ -1,5 +1,6 @@
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -7,11 +8,30 @@ def sh(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
-sha = sh("git", "rev-parse", "HEAD")
+if len(sys.argv) != 3:
+    print(f"Usage: python {sys.argv[0]} <start_commit> <end_commit>")
+    print("Example: python script.py main feature-branch")
+    sys.exit(1)
+
+start_commit = sys.argv[1]
+end_commit = sys.argv[2]
+
+try:
+    sh("git", "rev-parse", "--verify", start_commit)
+    end_sha = sh("git", "rev-parse", "--verify", end_commit)
+except subprocess.CalledProcessError:
+    raise SystemExit(
+        f"One or both commits '{start_commit}' or '{end_commit}' not found."
+    )
+
 files = [
     x
     for x in sh(
-        "git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "HEAD"
+        "git",
+        "diff",
+        "--name-only",
+        "--diff-filter=AM",
+        f"{start_commit}..{end_commit}",
     ).splitlines()
     if x.strip()
 ]
@@ -27,17 +47,20 @@ owner, repo = m.group(1), m.group(2)
 
 img_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 items = []
+
 for f in files:
     p = Path(f)
     if p.suffix.lower() in img_exts:
         stem = re.sub(r"_[A-Za-z0-9]{6,}$", "", p.stem)
         title = re.sub(r"[_-]+", " ", stem).strip() or stem
-        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{sha}/{f}"
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{end_sha}/{f}"
         items.append([title, raw_url, None])
 
 cols = 3
 if not items:
-    raise SystemExit("No image files found in latest commit")
+    raise SystemExit(
+        f"No image files added/modified between {start_commit} and {end_commit}"
+    )
 
 
 def chunk(xs, n):
@@ -46,6 +69,7 @@ def chunk(xs, n):
 
 blocks = chunk(items, cols)
 
+print(f"Found {len(items)} images. Please provide links:")
 for bi, b in enumerate(blocks, 1):
     for ii, it in enumerate(b, 1):
         t = it[0]
@@ -62,7 +86,9 @@ def link_cell(t, u):
 
 
 first = blocks[0] + [["", "", ""]] * (cols - len(blocks[0]))
-print("| " + " | ".join(img_cell(t, u) if t else "" for (t, u, _) in first) + " |")
+print(
+    "\n" + "| " + " | ".join(img_cell(t, u) if t else "" for (t, u, _) in first) + " |"
+)
 print("|" + "|".join(["---"] * cols) + "|")
 print("| " + " | ".join(link_cell(t, lu) if t else "" for (t, _, lu) in first) + " |")
 
