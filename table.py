@@ -4,34 +4,27 @@ import sys
 from pathlib import Path
 
 
-def sh(*args):
-    return subprocess.check_output(args, text=True).strip()
+def sh(*args, **kwargs):
+    return subprocess.check_output(args, text=True, **kwargs).strip()
 
 
 if len(sys.argv) != 3:
     print(f"Usage: python {sys.argv[0]} <start_commit> <end_commit>")
-    print("Example: python script.py main feature-branch")
     sys.exit(1)
 
 start_commit = sys.argv[1]
 end_commit = sys.argv[2]
 
 try:
-    sh("git", "rev-parse", "--verify", start_commit)
-    end_sha = sh("git", "rev-parse", "--verify", end_commit)
+    end_sha = sh("git", "rev-parse", end_commit)
+    baseline = sh("git", "rev-parse", f"{start_commit}~1", stderr=subprocess.DEVNULL)
 except subprocess.CalledProcessError:
-    raise SystemExit(
-        f"One or both commits '{start_commit}' or '{end_commit}' not found."
-    )
+    baseline = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 files = [
     x
     for x in sh(
-        "git",
-        "diff",
-        "--name-only",
-        "--diff-filter=AM",
-        f"{start_commit}..{end_commit}",
+        "git", "diff", "--name-only", "--diff-filter=AM", f"{baseline}..{end_sha}"
     ).splitlines()
     if x.strip()
 ]
@@ -58,9 +51,8 @@ for f in files:
 
 cols = 3
 if not items:
-    raise SystemExit(
-        f"No image files added/modified between {start_commit} and {end_commit}"
-    )
+    print(f"No image files found between {start_commit} and {end_commit}")
+    sys.exit(0)
 
 
 def chunk(xs, n):
