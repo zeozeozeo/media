@@ -70,7 +70,7 @@ for bi, b in enumerate(blocks, 1):
 
 
 def img_cell(t, u):
-    return f"![{t}]({u})"
+    return f'<img src="{u}" width="1280" height="720" alt="{t}">'
 
 
 def link_cell(t, u):
